@@ -81,9 +81,12 @@ public final class PlaybackService extends MediaSessionService {
                 if (!"ytdl".equals(u.getScheme())) return spec;
                 String id = u.toString().substring(Song.YT.length());   // keep case: YouTube ids are case-sensitive
                 try {
+                    long t0 = System.currentTimeMillis();
                     Yt.Stream s = Yt.resolve(PlaybackService.this, id);
+                    android.util.Log.i("IBRADL", "resolved " + id + " in " + (System.currentTimeMillis() - t0) + "ms -> " + s.url.substring(0, Math.min(80, s.url.length())));
                     return spec.withUri(Uri.parse(s.url)).withAdditionalHeaders(s.headers);
                 } catch (Exception e) {
+                    android.util.Log.e("IBRADL", "resolve failed " + id, e);
                     throw new IOException("تعذر جلب رابط الأغنية: " + Yt.shortError(e.getMessage()), e);
                 }
             }
@@ -107,8 +110,9 @@ public final class PlaybackService extends MediaSessionService {
             }
             @Override public void onRepeatModeChanged(int mode) { refreshButtons(); saveState(); }
             @Override public void onShuffleModeEnabledChanged(boolean on) { refreshButtons(); saveState(); }
-            @Override public void onIsPlayingChanged(boolean playing) { saveState(); }
+            @Override public void onIsPlayingChanged(boolean playing) { android.util.Log.i("IBRADL", "playing=" + playing); saveState(); }
             @Override public void onPlayerError(@NonNull PlaybackException error) {
+                android.util.Log.e("IBRADL", "player error", error);
                 // Expired / refused YouTube link: fetch a new one and try again once.
                 MediaItem cur = player.getCurrentMediaItem();
                 if (cur != null && cur.mediaId.startsWith(Song.YT) && retries < 1) {
