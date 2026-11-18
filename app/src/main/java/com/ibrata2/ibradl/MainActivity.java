@@ -1068,7 +1068,8 @@ public final class MainActivity extends Activity {
         fArt.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         fArt.setClipToOutline(true);
         fArt.setElevation(dp(10));
-        int side = Math.min(getResources().getDisplayMetrics().widthPixels - dp(70), dp(380));
+        int side = Math.min(Math.min(getResources().getDisplayMetrics().widthPixels - dp(70), dp(380)),
+                (int) (getResources().getDisplayMetrics().heightPixels * 0.40f));
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(side, side);
         alp.setMargins(0, dp(18), 0, dp(22));
         col.addView(fArt, alp);

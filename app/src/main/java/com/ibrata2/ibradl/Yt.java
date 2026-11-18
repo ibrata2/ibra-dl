@@ -228,13 +228,22 @@ final class Yt {
         if (local != null) return new Stream(android.net.Uri.fromFile(local).toString(), new HashMap<>());
         android.util.Log.i("IBRADL", "resolving " + videoId);
         if (!ensure(ctx)) throw new RuntimeException(stateError);
-        YoutubeDLRequest r = new YoutubeDLRequest(page);
-        r.addOption("--no-playlist");
-        r.addOption("--no-warnings");
-        r.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best");
-        VideoInfo vi;
-        beginUse();
-        try { vi = YoutubeDL.getInstance().getInfo(r); } finally { endUse(); }
+        VideoInfo vi = null;
+        Exception last = null;
+        // YouTube sometimes answers one client with "confirm you're not a bot"; try the others.
+        for (String client : CLIENTS) {
+            if (client != null && !page.contains("youtu")) break;
+            YoutubeDLRequest r = new YoutubeDLRequest(page);
+            r.addOption("--no-playlist");
+            r.addOption("--no-warnings");
+            r.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best");
+            if (client != null) r.addOption("--extractor-args", "youtube:player_client=" + client);
+            beginUse();
+            try { vi = YoutubeDL.getInstance().getInfo(r); break; }
+            catch (Exception e) { last = e; android.util.Log.w("IBRADL", "client " + client + " failed: " + shortError(e.getMessage())); }
+            finally { endUse(); }
+        }
+        if (vi == null) throw last != null ? last : new RuntimeException("no stream");
         String url = vi.getUrl();
         if (url == null || url.isEmpty()) throw new RuntimeException("no stream");
         Map<String, String> h = vi.getHttpHeaders() == null ? new HashMap<>() : new HashMap<>(vi.getHttpHeaders());
@@ -244,6 +253,9 @@ final class Yt {
     }
 
     static void forget(String videoId) { streams.remove(videoId); }
+
+    /** null = yt-dlp's default choice. */
+    static final String[] CLIENTS = {null, "tv_simply,web_safari", "android_vr,mweb"};
 
     // ------------------------------------------------------------------ downloads
     static final class Choice {
@@ -369,6 +381,8 @@ final class Yt {
             }
             beginUse();
             try {
+            for (int attempt = 0; ; attempt++) {
+            try {
             YoutubeDL.getInstance().execute(r, "job" + j.id, (p, eta, line) -> {
                 if (p != null && p >= 0) j.progress = p;
                 if (eta != null) j.eta = eta;
@@ -378,6 +392,18 @@ final class Yt {
                 }
                 return kotlin.Unit.INSTANCE;
             });
+            break;
+            } catch (YoutubeDL.CanceledException ce) {
+                throw ce;
+            } catch (Exception e) {
+                String m = String.valueOf(e.getMessage());
+                boolean yt = j.song.watchUrl().contains("youtu");
+                if (!yt || attempt + 1 >= CLIENTS.length || "canceled".equals(j.status)
+                        || !(m.contains("bot") || m.contains("403") || m.contains("format") || m.contains("Sign in"))) throw e;
+                r.addOption("--extractor-args", "youtube:player_client=" + CLIENTS[attempt + 1]);
+                j.progress = 0;
+            }
+            }
             } finally { endUse(); }
             File f = newest(dir, started);
             j.file = f != null ? f.getAbsolutePath() : "";
