@@ -425,7 +425,9 @@ public final class MainActivity extends Activity {
         col.addView(list(homeAdapter), new LinearLayout.LayoutParams(-1, 0, 1));
         activeAdapter = homeAdapter;
         updateHomeStatus();
-        if (results.isEmpty() && !searching && searchError.isEmpty()) doSearch(GENRES[0]);
+        // post: never rebuild the page while it is still being built (that stacked two pages and the
+        // empty one on top swallowed every tap on the results)
+        if (results.isEmpty() && !searching && searchError.isEmpty()) ui.post(() -> doSearch(GENRES[0]));
         return col;
     }
 
@@ -448,7 +450,8 @@ public final class MainActivity extends Activity {
         lastQuery = q;
         searching = true;
         searchError = "";
-        if (tab == TAB_HOME) showTab(TAB_HOME, true);
+        results.clear();
+        if (tab == TAB_HOME && homeAdapter != null) { homeAdapter.notifyDataSetChanged(); updateHomeStatus(); }
         final String query = q;
         Yt.search(this, q, (list, err) -> {
             if (!query.equals(lastQuery)) return;

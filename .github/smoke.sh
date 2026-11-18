@@ -62,8 +62,8 @@ tap_text "قائمة تشغيل جديدة"; sleep 2; shot 06-new-playlist-dialo
 adb shell input keyevent KEYCODE_BACK
 sleep 1
 tap_text "التحميلات"; sleep 3
-tap_text "يوتيوب"; sleep 20; shot 08-browser-youtube
-tap_text "تحميل"; sleep 6; shot 09-browser-grab
+tap_text "فتح"; sleep 20; shot 08-browser-youtube
+tap_text "⬇"; sleep 6; shot 09-browser-grab
 adb shell input keyevent KEYCODE_BACK; sleep 1
 adb shell input keyevent KEYCODE_BACK; sleep 1
 adb shell am start -n $ACT
