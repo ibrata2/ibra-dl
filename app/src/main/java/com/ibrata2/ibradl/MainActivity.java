@@ -140,6 +140,7 @@ public final class MainActivity extends Activity {
         showTab(t);
         handleIntent(getIntent());
         ui.post(tick);
+        ui.postDelayed(() -> Updater.check(this, true), 4000);   // quiet check on start
     }
 
     @Override protected void onStart() {
@@ -262,6 +263,8 @@ public final class MainActivity extends Activity {
         header.addView(sp, new LinearLayout.LayoutParams(0, 1, 1));
         headerTitle = tv("", 15, MUTED, false);
         header.addView(headerTitle);
+        ImageView hu = iconBtn("refresh", GOLD, 38, v -> { toast("جاري البحث عن تحديث…"); Updater.check(this, false); });
+        header.addView(hu);
         col.addView(header);
 
         content = new FrameLayout(this);
@@ -936,6 +939,13 @@ public final class MainActivity extends Activity {
         String ver = "";
         try { ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         col.addView(tv("الإصدار " + ver, 13, MUTED, false));
+        TextView upd = pill("⟳  تحديث التطبيق", true);
+        upd.setGravity(Gravity.CENTER);
+        upd.setPadding(dp(22), dp(11), dp(22), dp(11));
+        upd.setOnClickListener(v -> { toast("جاري البحث عن تحديث…"); Updater.check(this, false); });
+        LinearLayout.LayoutParams ulp0 = new LinearLayout.LayoutParams(-2, -2);
+        ulp0.setMargins(0, dp(10), 0, 0);
+        col.addView(upd, ulp0);
         TextView desc = tv("ابحث واستمع لأي أغنية من يوتيوب، حمّلها MP3 أو M4A أو فيديو، شغّل أغاني جهازك، "
                 + "واعمل قوائم تشغيل خاصة بيك. الأغنية تبقى تشتغل بالخلفية حتى لو طلعت من التطبيق، "
                 + "وتكدر تكرر الأغنية نفسها أو القائمة من الإشعار مباشرة. بدون إعلانات.", 14, TEXT, false);
