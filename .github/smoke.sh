@@ -26,7 +26,11 @@ adb install -r -g app-x86_64-release.apk
 adb logcat -G 16M || true
 adb logcat -c
 adb shell am start -n $ACT
-sleep 45
+for i in $(seq 1 24); do   # wait (max 2 min) for search results
+  sleep 5
+  adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1
+  adb shell cat /sdcard/u.xml 2>/dev/null | grep -q "·" && { echo "results after $((i*5))s"; break; }
+done
 shot 01-home-search
 read W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr x ' ')
 echo "screen $W x $H"

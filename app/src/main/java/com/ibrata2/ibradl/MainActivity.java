@@ -1371,6 +1371,7 @@ public final class MainActivity extends Activity {
             if (s.isYoutube() && Yt.isDownloaded(s.videoId())) sub = "✓ محمّلة  ·  " + sub;
             h.sub.setText(sub);
             Img.load(MainActivity.this, h.art, s, artFallback());
+            h.itemView.setOnClickListener(v -> { android.util.Log.i("IBRADL", "row click " + h.getBindingAdapterPosition()); } );
             h.itemView.setOnClickListener(v -> play(new ArrayList<>(songs), h.getBindingAdapterPosition()));
             h.more.setOnClickListener(v -> songMenu(s, playlistId, new ArrayList<>(songs), h.getBindingAdapterPosition()));
             h.itemView.setOnLongClickListener(v -> { songMenu(s, playlistId, new ArrayList<>(songs), h.getBindingAdapterPosition()); return true; });

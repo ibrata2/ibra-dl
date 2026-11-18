@@ -50,6 +50,14 @@ final class Yt {
         work.execute(() -> ensure(app));
     }
 
+    /**
+     * yt-dlp lives in one zip file. Updating replaces that file, so nothing may run yt-dlp
+     * while it is being replaced: every call holds the read lock, an update holds the write lock.
+     */
+    private static final java.util.concurrent.locks.ReentrantReadWriteLock rw = new java.util.concurrent.locks.ReentrantReadWriteLock();
+    static void beginUse() { rw.readLock().lock(); }
+    static void endUse() { rw.readLock().unlock(); }
+
     /** Blocks until yt-dlp is ready (used by background threads). */
     static boolean ensure(Context ctx) {
         synchronized (initLock) {
@@ -59,33 +67,45 @@ final class Yt {
             try {
                 YoutubeDL.getInstance().init(app);
                 FFmpeg.getInstance().init(app);
-                state = READY;
             } catch (Throwable e) {
                 stateError = String.valueOf(e.getMessage());
                 state = FAILED;
                 return false;
             }
+            // First run of the day: bring yt-dlp up to date before anything uses it.
+            Store st = new Store(app);
+            if (System.currentTimeMillis() - st.num("ytdlpCheck", 0) > 24L * 3600_000L) {
+                update(app);
+                st.put("ytdlpCheck", System.currentTimeMillis());
+            }
+            state = READY;
         }
-        autoUpdate(ctx.getApplicationContext());
         return true;
     }
 
-    /** YouTube changes often; refresh yt-dlp quietly once a day. */
-    private static void autoUpdate(Context app) {
-        Store st = new Store(app);
-        if (System.currentTimeMillis() - st.num("ytdlpCheck", 0) < 24L * 3600_000L) return;
-        st.put("ytdlpCheck", System.currentTimeMillis());
-        work.execute(() -> {
-            try { YoutubeDL.getInstance().updateYoutubeDL(app, YoutubeDL.UpdateChannel._STABLE); } catch (Throwable ignored) { }
-        });
+    private static YoutubeDL.UpdateStatus update(Context app) {
+        rw.writeLock().lock();
+        try {
+            android.util.Log.i("IBRADL", "updating yt-dlp");
+            YoutubeDL.UpdateStatus s = YoutubeDL.getInstance().updateYoutubeDL(app, YoutubeDL.UpdateChannel._STABLE);
+            android.util.Log.i("IBRADL", "yt-dlp update: " + s + " " + YoutubeDL.getInstance().versionName(app));
+            return s;
+        } catch (Throwable e) {
+            android.util.Log.e("IBRADL", "yt-dlp update failed", e);
+            return null;
+        } finally {
+            rw.writeLock().unlock();
+        }
     }
 
     static void updateEngine(Context ctx, Done<String> done) {
         Context app = ctx.getApplicationContext();
         work.execute(() -> {
             try {
-                ensure(app);
-                YoutubeDL.UpdateStatus s = YoutubeDL.getInstance().updateYoutubeDL(app, YoutubeDL.UpdateChannel._STABLE);
+                if (!ensure(app)) throw new RuntimeException(stateError);
+                YoutubeDL.UpdateStatus s = update(app);
+                if (s == null) throw new RuntimeException("تأكد من الإنترنت");
+                new Store(app).put("ytdlpCheck", System.currentTimeMillis());
                 String v = YoutubeDL.getInstance().versionName(app);
                 UI.post(() -> done.run((s == YoutubeDL.UpdateStatus.DONE ? "تم التحديث ✓ " : "محدّث ✓ ") + (v == null ? "" : v), null));
             } catch (Throwable e) {
@@ -109,7 +129,10 @@ final class Yt {
                 r.addOption("--flat-playlist");
                 r.addOption("-J");
                 r.addOption("--no-warnings");
-                YoutubeDLResponse res = YoutubeDL.getInstance().execute(r, "q" + System.nanoTime(), (p, eta, line) -> kotlin.Unit.INSTANCE);
+                YoutubeDLResponse res;
+                beginUse();
+                try { res = YoutubeDL.getInstance().execute(r, "q" + System.nanoTime(), (p, eta, line) -> kotlin.Unit.INSTANCE); }
+                finally { endUse(); }
                 List<Song> out = parseEntries(res.getOut());
                 UI.post(() -> done.run(out, null));
             } catch (Throwable e) {
@@ -129,7 +152,10 @@ final class Yt {
                 r.addOption("--flat-playlist");
                 r.addOption("-J");
                 r.addOption("--no-warnings");
-                YoutubeDLResponse res = YoutubeDL.getInstance().execute(r, "q" + System.nanoTime(), (p, eta, line) -> kotlin.Unit.INSTANCE);
+                YoutubeDLResponse res;
+                beginUse();
+                try { res = YoutubeDL.getInstance().execute(r, "q" + System.nanoTime(), (p, eta, line) -> kotlin.Unit.INSTANCE); }
+                finally { endUse(); }
                 String out = res.getOut();
                 List<Song> songs = parseEntries(out);
                 if (songs.isEmpty()) {
@@ -191,7 +217,9 @@ final class Yt {
         r.addOption("--no-playlist");
         r.addOption("--no-warnings");
         r.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best");
-        VideoInfo vi = YoutubeDL.getInstance().getInfo(r);
+        VideoInfo vi;
+        beginUse();
+        try { vi = YoutubeDL.getInstance().getInfo(r); } finally { endUse(); }
         String url = vi.getUrl();
         if (url == null || url.isEmpty()) throw new RuntimeException("no stream");
         Map<String, String> h = vi.getHttpHeaders() == null ? new HashMap<>() : new HashMap<>(vi.getHttpHeaders());
@@ -324,6 +352,8 @@ final class Yt {
                 r.addOption("-S", "res:" + c.value + ",vcodec:h264,acodec:m4a");
                 r.addOption("--merge-output-format", "mp4");
             }
+            beginUse();
+            try {
             YoutubeDL.getInstance().execute(r, "job" + j.id, (p, eta, line) -> {
                 if (p != null && p >= 0) j.progress = p;
                 if (eta != null) j.eta = eta;
@@ -333,6 +363,7 @@ final class Yt {
                 }
                 return kotlin.Unit.INSTANCE;
             });
+            } finally { endUse(); }
             File f = newest(dir, started);
             j.file = f != null ? f.getAbsolutePath() : "";
             j.progress = 100;
