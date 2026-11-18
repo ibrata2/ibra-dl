@@ -33,11 +33,20 @@ final class Song {
         return new Song(YT + videoId, title, channel, "https://i.ytimg.com/vi/" + videoId + "/hqdefault.jpg", "", durationMs);
     }
 
+    /** A song from another site (SoundCloud, Audiomack…): the key after ytdl:// is the page link. */
+    static Song web(String url, String title, String uploader, String thumb, long durationMs) {
+        return new Song(YT + url, title, uploader, thumb, "", durationMs);
+    }
+
+    /** Online song handled by yt-dlp (YouTube or any supported site). */
     boolean isYoutube() { return id.startsWith(YT); }
 
     String videoId() { return isYoutube() ? id.substring(YT.length()) : ""; }
 
-    String watchUrl() { return "https://www.youtube.com/watch?v=" + videoId(); }
+    String watchUrl() {
+        String v = videoId();
+        return v.startsWith("http") ? v : "https://www.youtube.com/watch?v=" + v;
+    }
 
     JSONObject json() {
         JSONObject o = new JSONObject();

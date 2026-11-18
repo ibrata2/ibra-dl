@@ -139,6 +139,16 @@ final class Icon extends Drawable {
                 poly(c, 5, 9, 12, 16, 19, 9); break;
             case "up":
                 poly(c, 5, 15, 12, 8, 19, 15); break;
+            case "yt": {   // red rounded box with a white play triangle
+                Paint red = new Paint(fill); red.setColor(0xFFFF0033);
+                c.drawRoundRect(new RectF(1.5f, 5, 22.5f, 19), 4.5f, 4.5f, red);
+                Paint w = new Paint(fill); w.setColor(0xFFFFFFFF);
+                Path t = new Path(); t.moveTo(10, 8.8f); t.lineTo(15.6f, 12); t.lineTo(10, 15.2f); t.close();
+                c.drawPath(t, w); break;
+            }
+            case "globe":
+                c.drawCircle(12, 12, 8.5f, stroke); c.drawOval(new RectF(8, 3.5f, 16, 20.5f), stroke);
+                c.drawLine(3.5f, 12, 20.5f, 12, stroke); break;
             default:
                 c.drawCircle(12, 12, 3, fill);
         }

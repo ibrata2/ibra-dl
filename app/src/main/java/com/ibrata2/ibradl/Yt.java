@@ -133,7 +133,7 @@ final class Yt {
                 beginUse();
                 try { res = YoutubeDL.getInstance().execute(r, "q" + System.nanoTime(), (p, eta, line) -> kotlin.Unit.INSTANCE); }
                 finally { endUse(); }
-                List<Song> out = parseEntries(res.getOut());
+                List<Song> out = parseEntries(res.getOut(), false);
                 UI.post(() -> done.run(out, null));
             } catch (Throwable e) {
                 String m = shortError(String.valueOf(e.getMessage()));
@@ -157,10 +157,11 @@ final class Yt {
                 try { res = YoutubeDL.getInstance().execute(r, "q" + System.nanoTime(), (p, eta, line) -> kotlin.Unit.INSTANCE); }
                 finally { endUse(); }
                 String out = res.getOut();
-                List<Song> songs = parseEntries(out);
+                List<Song> songs = parseEntries(out, true);
                 if (songs.isEmpty()) {
                     JSONObject o = new JSONObject(out.substring(out.indexOf('{')));
-                    Song s = entry(o);
+                    if (o.optString("webpage_url").isEmpty()) o.put("webpage_url", url);
+                    Song s = entry(o, true);
                     if (s != null) songs.add(s);
                 }
                 UI.post(() -> done.run(songs, null));
@@ -171,7 +172,7 @@ final class Yt {
         });
     }
 
-    private static List<Song> parseEntries(String out) throws Exception {
+    private static List<Song> parseEntries(String out, boolean anySite) throws Exception {
         List<Song> list = new ArrayList<>();
         int b = out.indexOf('{');
         if (b < 0) return list;
@@ -179,20 +180,33 @@ final class Yt {
         JSONArray entries = root.optJSONArray("entries");
         if (entries == null) return list;
         for (int i = 0; i < entries.length(); i++) {
-            Song s = entry(entries.optJSONObject(i));
+            Song s = entry(entries.optJSONObject(i), anySite);
             if (s != null) list.add(s);
         }
         return list;
     }
 
-    private static Song entry(JSONObject e) {
+    private static Song entry(JSONObject e, boolean anySite) {
         if (e == null) return null;
         String id = e.optString("id");
-        if (id.length() != 11) return null;   // channels / playlists in results
+        String url = e.optString("webpage_url", "");
+        if (url.isEmpty() || "null".equals(url)) url = e.optString("url", "");
+        String ie = e.optString("ie_key", e.optString("extractor_key", "")).toLowerCase(Locale.ROOT);
         String ch = e.optString("channel", e.optString("uploader", ""));
         if ("null".equals(ch)) ch = "";
         long d = (long) (e.optDouble("duration", 0) * 1000);
-        return Song.youtube(id, e.optString("title"), ch, d);
+        boolean yt = ie.startsWith("youtube") || url.contains("youtube.com/") || url.contains("youtu.be/") || (url.isEmpty() && ie.isEmpty());
+        if (yt) {
+            if (id.length() != 11) return null;   // channels / playlists in results
+            return Song.youtube(id, e.optString("title"), ch, d);
+        }
+        if (!anySite || !url.startsWith("http")) return null;
+        String thumb = e.optString("thumbnail", "");
+        if (thumb.isEmpty() || "null".equals(thumb)) {
+            JSONArray th = e.optJSONArray("thumbnails");
+            if (th != null && th.length() > 0) thumb = th.optJSONObject(th.length() - 1).optString("url", "");
+        }
+        return Song.web(url, e.optString("title", url), ch, thumb, d);
     }
 
     // ------------------------------------------------------------------ streaming
@@ -207,13 +221,14 @@ final class Yt {
 
     /** Returns a direct audio link for a YouTube video (blocking; call off the main thread). Cached ~3h. */
     static Stream resolve(Context ctx, String videoId) throws Exception {
+        String page = videoId.startsWith("http") ? videoId : "https://www.youtube.com/watch?v=" + videoId;
         Stream s = streams.get(videoId);
         if (s != null && System.currentTimeMillis() - s.at < 3 * 3600_000L) return s;
         File local = downloadedFile(videoId);
         if (local != null) return new Stream(android.net.Uri.fromFile(local).toString(), new HashMap<>());
         android.util.Log.i("IBRADL", "resolving " + videoId);
         if (!ensure(ctx)) throw new RuntimeException(stateError);
-        YoutubeDLRequest r = new YoutubeDLRequest("https://www.youtube.com/watch?v=" + videoId);
+        YoutubeDLRequest r = new YoutubeDLRequest(page);
         r.addOption("--no-playlist");
         r.addOption("--no-warnings");
         r.addOption("-f", "bestaudio[ext=m4a]/bestaudio/best");
@@ -271,7 +286,7 @@ final class Yt {
     /** Files are named "Title [videoId].ext" so we can tell which YouTube song they came from. */
     static File downloadedFile(String videoId) {
         File[] all = outDir().listFiles();
-        if (all == null || videoId.isEmpty()) return null;
+        if (all == null || videoId.isEmpty() || videoId.startsWith("http")) return null;
         for (File f : all) {
             String n = f.getName();
             if (n.contains("[" + videoId + "]") && isAudio(n)) return f;

@@ -32,11 +32,12 @@ for i in $(seq 1 24); do   # wait (max 2 min) for search results
   adb shell cat /sdcard/u.xml 2>/dev/null | grep -q "·" && { echo "results after $((i*5))s"; break; }
 done
 shot 01-home-search
+cp /tmp/u.xml shots/home-dump.xml 2>/dev/null || adb shell cat /sdcard/u.xml > shots/home-dump.xml
 read W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr x ' ')
 echo "screen $W x $H"
 tap_text "·"      # first search result (its sub-line has "artist · duration")
 sleep 3
-adb logcat -d | grep -q "IBRADL: play" || { echo "fallback coordinate tap"; adb shell input tap $((W/2)) $((H*31/100)); }
+adb logcat -d | grep -q "IBRADL.*play index" || { echo "fallback coordinate tap"; adb shell input tap $((W/2)) $((H*31/100)); }
 sleep 40
 shot 02-playing
 adb logcat -d | grep -E "IBRADL" | head -40
@@ -59,6 +60,14 @@ done
 tap_text "القوائم"; sleep 2
 tap_text "قائمة تشغيل جديدة"; sleep 2; shot 06-new-playlist-dialog
 adb shell input keyevent KEYCODE_BACK
+sleep 1
+tap_text "التحميلات"; sleep 3
+tap_text "يوتيوب"; sleep 20; shot 08-browser-youtube
+tap_text "تحميل"; sleep 6; shot 09-browser-grab
+adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell am start -n $ACT
+sleep 2
 adb shell monkey -p $PKG --pct-syskeys 0 --throttle 200 -s 42 300 || true
 sleep 3
 shot 07-after-monkey

@@ -92,6 +92,7 @@ public final class MainActivity extends Activity {
     private FrameLayout content;
     private LinearLayout nav, mini;
     private TextView headerTitle, dlBadge;
+    private LinearLayout headerBar, fullCol, mainCol;
     private int tab = -1;
 
     // search state (kept while switching tabs)
@@ -130,7 +131,9 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        setContentView(buildRoot());
+        View rootView = buildRoot();
+        setContentView(rootView);
+        applyInsets(rootView);
         Yt.prepare(this);
         askPermissions();
         int t = getIntent().getIntExtra(EXTRA_TAB, TAB_HOME);
@@ -176,6 +179,12 @@ public final class MainActivity extends Activity {
         if (tab == TAB_PLAYLISTS && openPlaylist != null) { openPlaylist = null; showTab(TAB_PLAYLISTS, true); return; }
         if (tab != TAB_HOME) { showTab(TAB_HOME); return; }
         moveTaskToBack(true);   // keep the music going, like pressing Home
+    }
+
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        if (ev.getActionMasked() == android.view.MotionEvent.ACTION_UP)
+            android.util.Log.i("IBRADL", "touch up " + (int) ev.getX() + "," + (int) ev.getY() + " fullVisible=" + (full.getVisibility() == View.VISIBLE));
+        return super.dispatchTouchEvent(ev);
     }
 
     private final Runnable tick = new Runnable() {
@@ -238,11 +247,13 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(BG);
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
+        mainCol = col;
         root.addView(col, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(18), dp(14), dp(18), dp(8));
+        headerBar = header;
         TextView logo = tv("IBRA DL", 22, GOLD, true);
         logo.setLetterSpacing(0.06f);
         logo.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
@@ -293,6 +304,27 @@ public final class MainActivity extends Activity {
         full.setVisibility(View.GONE);
         root.addView(full, new FrameLayout.LayoutParams(-1, -1));
         return root;
+    }
+
+    /**
+     * Draw edge-to-edge and keep our bars clear of the phone's status bar, its navigation
+     * buttons / gesture bar and the keyboard (Android 15 no longer does this for us).
+     */
+    private void applyInsets(View root) {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, in) -> {
+            androidx.core.graphics.Insets bars = in.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                    | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            int ime = in.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;
+            boolean kb = ime > bars.bottom;
+            headerBar.setPadding(dp(18) + bars.left, dp(14) + bars.top, dp(18) + bars.right, dp(8));
+            // keyboard open: lift the whole page above it and hide the tab bar
+            mainCol.setPadding(0, 0, 0, kb ? ime : 0);
+            nav.setPadding(bars.left, dp(6), bars.right, dp(6) + bars.bottom);
+            nav.setVisibility(kb ? View.GONE : View.VISIBLE);
+            fullCol.setPadding(dp(22) + bars.left, dp(12) + bars.top, dp(22) + bars.right, dp(22) + bars.bottom);
+            return androidx.core.view.WindowInsetsCompat.CONSUMED;
+        });
     }
 
     private void showTab(int t) { showTab(t, false); }
@@ -708,10 +740,17 @@ public final class MainActivity extends Activity {
         col.addView(info);
 
         ScrollView sv = new ScrollView(this);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.addView(sitesSection());
+        TextView mine = tv("تحميلاتك", 15, TEXT, true);
+        mine.setPadding(dp(2), dp(16), dp(2), dp(2));
+        body.addView(mine);
         LinearLayout items = new LinearLayout(this);
         items.setOrientation(LinearLayout.VERTICAL);
         items.setPadding(0, dp(4), 0, dp(16));
-        sv.addView(items);
+        body.addView(items);
+        sv.addView(body);
         col.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1));
 
         Map<Integer, Object[]> live = new HashMap<>();
@@ -724,9 +763,9 @@ public final class MainActivity extends Activity {
                 List<Yt.Job> js;
                 synchronized (Yt.jobs) { js = new ArrayList<>(Yt.jobs); }
                 if (js.isEmpty()) {
-                    TextView e = tv("ما في تحميلات حالياً.\nابحث عن أغنية من «الرئيسية» واضغط ⋮ ← تحميل،\nأو شارك رابط من يوتيوب إلى IBRA DL.", 14, MUTED, false);
+                    TextView e = tv("ما في تحميلات بعد. افتح يوتيوب من الأعلى، شغّل الأغنية واضغط «⬇ تحميل»،\nأو من «الرئيسية» اضغط ⋮ ← تحميل.", 13, MUTED, false);
                     e.setGravity(Gravity.CENTER);
-                    e.setPadding(dp(16), dp(40), dp(16), 0);
+                    e.setPadding(dp(16), dp(12), dp(16), 0);
                     items.addView(e);
                 }
                 for (Yt.Job j : js) items.addView(jobRow(j, live));
@@ -739,6 +778,90 @@ public final class MainActivity extends Activity {
         };
         pageTick.run();
         return col;
+    }
+
+    /** Sites the downloader opens inside the app. YouTube first. {name, url, colour, initials} */
+    private static final String[][] SITES = {
+            {"يوتيوب ميوزك", "https://music.youtube.com", "#FF0033", "YM"},
+            {"ساوند كلاود", "https://m.soundcloud.com", "#FF5500", "SC"},
+            {"أوديوماك", "https://audiomack.com", "#FFA200", "AM"},
+            {"مكس كلاود", "https://www.mixcloud.com", "#5000FF", "MC"},
+            {"باندكامب", "https://bandcamp.com", "#1DA0C3", "BC"},
+            {"جامندو", "https://www.jamendo.com", "#E4196B", "JA"},
+            {"أرشيف الصوتيات", "https://archive.org/details/audio", "#4A4A4A", "AR"},
+            {"ديلي موشن", "https://www.dailymotion.com", "#0066DC", "DM"},
+            {"فيميو", "https://vimeo.com", "#1AB7EA", "VI"},
+            {"تيك توك", "https://www.tiktok.com", "#FE2C55", "TT"},
+            {"انستغرام", "https://www.instagram.com", "#E1306C", "IG"},
+            {"فيسبوك", "https://m.facebook.com", "#1877F2", "FB"},
+    };
+
+    private View sitesSection() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        // YouTube: big card first
+        LinearLayout yt = new LinearLayout(this);
+        yt.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable ytBg = new GradientDrawable(GradientDrawable.Orientation.RIGHT_LEFT, new int[]{0xFF3A0A10, 0xFF1A1A1F});
+        ytBg.setCornerRadius(dp(18));
+        ytBg.setStroke(dp(1), 0x55FF0033);
+        yt.setBackground(ytBg);
+        yt.setPadding(dp(14), dp(14), dp(14), dp(14));
+        ImageView logo = new ImageView(this);
+        logo.setImageDrawable(new Icon("yt", Color.WHITE));
+        yt.addView(logo, new LinearLayout.LayoutParams(dp(56), dp(56)));
+        LinearLayout tt = new LinearLayout(this);
+        tt.setOrientation(LinearLayout.VERTICAL);
+        tt.setPadding(dp(12), 0, dp(8), 0);
+        tt.addView(tv("يوتيوب", 19, TEXT, true));
+        TextView hint = tv("افتح يوتيوب، شغّل الأغنية واضغط «⬇ تحميل»", 12, MUTED, false);
+        tt.addView(hint);
+        yt.addView(tt, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView open = tv("فتح", 14, Color.WHITE, true);
+        open.setBackground(round(0xFFFF0033, 18));
+        open.setPadding(dp(16), dp(8), dp(16), dp(8));
+        yt.addView(open);
+        yt.setOnClickListener(v -> BrowserActivity.open(this, "يوتيوب", "https://m.youtube.com"));
+        LinearLayout.LayoutParams ylp = new LinearLayout.LayoutParams(-1, -2);
+        ylp.setMargins(0, dp(4), 0, dp(10));
+        box.addView(yt, ylp);
+
+        TextView more = tv("مواقع موسيقى وأغاني", 15, TEXT, true);
+        more.setPadding(dp(2), dp(4), dp(2), dp(6));
+        box.addView(more);
+
+        int perRow = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density >= 560 ? 4 : 3;
+        LinearLayout row = null;
+        for (int i = 0; i < SITES.length; i++) {
+            if (i % perRow == 0) {
+                row = new LinearLayout(this);
+                box.addView(row, new LinearLayout.LayoutParams(-1, -2));
+            }
+            String[] site = SITES[i];
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER);
+            cell.setBackground(round(CARD, 14));
+            cell.setPadding(dp(4), dp(12), dp(4), dp(10));
+            TextView badge = tv(site[3], 14, Color.WHITE, true);
+            badge.setGravity(Gravity.CENTER);
+            badge.setBackground(round(Color.parseColor(site[2]), 22));
+            cell.addView(badge, new LinearLayout.LayoutParams(dp(44), dp(44)));
+            TextView label = tv(site[0], 12, TEXT, false);
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(1);
+            label.setEllipsize(TextUtils.TruncateAt.END);
+            label.setPadding(0, dp(6), 0, 0);
+            cell.addView(label, new LinearLayout.LayoutParams(-1, -2));
+            cell.setOnClickListener(v -> BrowserActivity.open(this, site[0], site[1]));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, -2, 1);
+            clp.setMargins(dp(3), dp(3), dp(3), dp(3));
+            row.addView(cell, clp);
+        }
+        int rest = SITES.length % perRow;
+        if (rest != 0) for (int k = rest; k < perRow; k++) row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        return box;
     }
 
     private View jobRow(Yt.Job j, Map<Integer, Object[]> live) {
@@ -915,6 +1038,7 @@ public final class MainActivity extends Activity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
         col.setPadding(dp(22), dp(12), dp(22), dp(22));
+        fullCol = col;
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -1371,7 +1495,6 @@ public final class MainActivity extends Activity {
             if (s.isYoutube() && Yt.isDownloaded(s.videoId())) sub = "✓ محمّلة  ·  " + sub;
             h.sub.setText(sub);
             Img.load(MainActivity.this, h.art, s, artFallback());
-            h.itemView.setOnClickListener(v -> { android.util.Log.i("IBRADL", "row click " + h.getBindingAdapterPosition()); } );
             h.itemView.setOnClickListener(v -> play(new ArrayList<>(songs), h.getBindingAdapterPosition()));
             h.more.setOnClickListener(v -> songMenu(s, playlistId, new ArrayList<>(songs), h.getBindingAdapterPosition()));
             h.itemView.setOnLongClickListener(v -> { songMenu(s, playlistId, new ArrayList<>(songs), h.getBindingAdapterPosition()); return true; });
