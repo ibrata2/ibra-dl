@@ -1064,6 +1064,7 @@ public final class MainActivity extends Activity {
     private void refreshPlayer() {
         View wrap = content.getRootView().findViewWithTag("miniWrap");
         Song s = current();
+        if (ctl != null) android.util.Log.i("IBRADL", "ui state=" + ctl.getPlaybackState() + " items=" + ctl.getMediaItemCount() + " playWhenReady=" + ctl.getPlayWhenReady());
         if (s == null || ctl == null) { if (wrap != null) wrap.setVisibility(View.GONE); return; }
         if (wrap != null) wrap.setVisibility(View.VISIBLE);
         boolean playing = ctl.getPlayWhenReady() && ctl.getPlaybackState() != Player.STATE_ENDED;
@@ -1109,6 +1110,8 @@ public final class MainActivity extends Activity {
 
     // ================================================================== playback actions
     private void play(List<Song> songs, int index) {
+        android.util.Log.i("IBRADL", "play index=" + index + " of " + songs.size() + " ctl=" + (ctl != null));
+        if (index < 0 || index >= songs.size()) return;
         if (ctl == null) { toast("المشغل يتجهز… جرّب بعد ثانية"); return; }
         List<MediaItem> items = new ArrayList<>();
         for (Song s : songs) items.add(s.item());

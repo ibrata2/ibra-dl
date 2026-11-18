@@ -185,6 +185,7 @@ final class Yt {
         if (s != null && System.currentTimeMillis() - s.at < 3 * 3600_000L) return s;
         File local = downloadedFile(videoId);
         if (local != null) return new Stream(android.net.Uri.fromFile(local).toString(), new HashMap<>());
+        android.util.Log.i("IBRADL", "resolving " + videoId);
         if (!ensure(ctx)) throw new RuntimeException(stateError);
         YoutubeDLRequest r = new YoutubeDLRequest("https://www.youtube.com/watch?v=" + videoId);
         r.addOption("--no-playlist");

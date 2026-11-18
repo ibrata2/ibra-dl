@@ -5,8 +5,12 @@ ACT=$PKG/.MainActivity
 mkdir -p shots
 shot() { adb exec-out screencap -p > "shots/$1.png"; }
 tap_text() {   # tap the first on-screen element whose text contains $1
-  adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1
-  adb shell cat /sdcard/u.xml > /tmp/u.xml
+  adb shell rm -f /sdcard/u.xml
+  for n in 1 2 3 4; do
+    adb shell uiautomator dump /sdcard/u.xml 2>&1 | tail -1
+    adb shell cat /sdcard/u.xml > /tmp/u.xml 2>/dev/null && grep -q "<node" /tmp/u.xml && break
+    sleep 2
+  done
   b=$(python3 - "$1" <<'PY'
 import re,sys
 x=open('/tmp/u.xml',encoding='utf-8').read()
@@ -27,8 +31,11 @@ shot 01-home-search
 read W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr x ' ')
 echo "screen $W x $H"
 tap_text "·"      # first search result (its sub-line has "artist · duration")
+sleep 3
+adb logcat -d | grep -q "IBRADL: play" || { echo "fallback coordinate tap"; adb shell input tap $((W/2)) $((H*31/100)); }
 sleep 40
 shot 02-playing
+adb logcat -d | grep -E "IBRADL" | head -40
 adb shell am start -n $ACT --ez openPlayer true
 sleep 4
 shot 03-full-player
