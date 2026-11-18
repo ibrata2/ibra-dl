@@ -1,0 +1,2 @@
+      state=PlaybackState {state=BUFFERING(6), position=0, buffered position=0, speed=0.0, updated=109481, actions=7339699, custom actions=[Action:mName='بدون تكرار, mIcon=2131165320, mExtras=Bundle[mParcelledData.dataSize=140], Action:mName='عشوائي: متوقف, mIcon=2131165325, mExtras=Bundle[mParcelledData.dataSize=140]], active item id=0, error=null}
+      metadata: size=12, description=Iraqi Songs | Oh You Who Go to the Beloved, I Have a Request, Iraqi Remix - Most Requested, null, null
