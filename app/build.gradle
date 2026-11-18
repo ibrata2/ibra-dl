@@ -1,0 +1,73 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ibrata2.ibradl'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.ibrata2.ibradl'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86_64'   // x86_64 = emulator test only
+            universalApk false
+        }
+    }
+
+    def signingProps = new Properties()
+    def signingFile = rootProject.file('keystore/signing.properties')
+    if (signingFile.exists()) signingFile.withInputStream { signingProps.load(it) }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file(signingProps.getProperty('storeFile', 'keystore/ibra-dl.jks'))
+            storePassword signingProps.getProperty('storePassword')
+            keyAlias signingProps.getProperty('keyAlias', 'ibradl')
+            keyPassword signingProps.getProperty('keyPassword')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    packaging {
+        jniLibs { useLegacyPackaging true }
+    }
+}
+
+def media3 = '1.8.0'
+dependencies {
+    implementation "androidx.media3:media3-exoplayer:$media3"
+    implementation "androidx.media3:media3-session:$media3"
+    implementation "androidx.media3:media3-datasource:$media3"
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.core:core:1.16.0'
+    implementation 'androidx.annotation:annotation-experimental:1.4.1'
+    // yt-dlp + ffmpeg: search, streaming links and downloads
+    implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
+    implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
+}
